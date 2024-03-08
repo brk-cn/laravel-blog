@@ -6,6 +6,10 @@ use App\Models\Post;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use Carbon\Carbon;
+use Spatie\FlareClient\Http\Exceptions\NotFound;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use App\Models\Category;
+
 
 class PostController extends Controller
 {
@@ -44,30 +48,38 @@ class PostController extends Controller
      */
     public function show(Post $post)
     {
-        //
+        if (!$post->is_active || $post->published_at > Carbon::now()) {
+            throw new NotFoundHttpException();
+        }
+
+        $next = Post::query()
+            ->where("is_active", true)
+            ->whereDate("published_at", "<=", Carbon::now())
+            ->whereDate("published_at", "<", $post->published_at)
+            ->orderBy("published_at", "desc")
+            ->limit(1)
+            ->first();
+
+        $prev = Post::query()
+            ->where("is_active", true)
+            ->whereDate("published_at", "<=", Carbon::now())
+            ->whereDate("published_at", ">", $post->published_at)
+            ->orderBy("published_at", "asc")
+            ->limit(1)
+            ->first();
+
+        return view("post.view", compact("post", "prev", "next"));
     }
 
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Post $post)
-    {
-        //
-    }
+    public function byCategory(Category $category) {
+        $posts = Post::query()
+            ->join('category_post', 'posts.id', '=', 'category_post.post_id')
+            ->where('category_post.category_id', '=', $category->id)
+            ->where('is_active', '=', true)
+            ->whereDate('published_at', '<=', Carbon::now())
+            ->orderBy('published_at', 'desc')
+            ->paginate(10);
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Post $post)
-    {
-        //
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(Post $post)
-    {
-        //
+        return view('home', compact('posts'));
     }
 }
